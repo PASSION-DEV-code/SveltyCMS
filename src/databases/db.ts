@@ -7,7 +7,7 @@
  * - Loading and initializing database and authentication adapters based on the configured DB_TYPE
  * - Establishing database connections with a retry mechanism
  * - Managing initialization of authentication models, media models, and collection models
- * - Setting up default roles and permissions
+ * - Setting up default roles
  * - Configuring Google OAuth2 client if credentials are provided
  *
  * Key Features:
@@ -15,7 +15,7 @@
  * - **Database Connection:** Implements a retry mechanism to handle connection failures and attempts reconnections.
  * - **Initialization Management:** Manages initialization state to prevent redundant setup processes. Asynchronous initialization with promise-based error handling.
  * - **Theme Initialization:** Handles default theme setup and ensures it's marked as default if not already.
- * - **Authentication and Authorization:** Configures and initializes authentication adapters, including user, role, permission, session, and token management.
+ * - **Authentication and Authorization:** Configures and initializes authentication adapters, including user, session, and token management.
  * - **Google OAuth2 Integration:** Optionally sets up Google OAuth2 client if the client ID and secret are provided.
  *
  * Usage:
@@ -33,7 +33,6 @@ import { browser } from '$app/environment';
 // Auth
 import { Auth } from '@src/auth';
 import { getCollections, updateCollections } from '@src/collections';
-import { getPermissionByName, getAllPermissions, syncPermissions } from '@src/auth/permissionManager';
 
 // Adapters Interfaces
 import type { dbInterface } from './dbInterface';
@@ -41,7 +40,6 @@ import type { authDBInterface } from '@src/auth/authDBInterface';
 
 // MongoDB Adapters
 import { UserAdapter } from '@src/auth/mongoDBAuth/userAdapter';
-import { RoleAdapter } from '@src/auth/mongoDBAuth/roleAdapter';
 import { SessionAdapter } from '@src/auth/mongoDBAuth/sessionAdapter';
 import { TokenAdapter } from '@src/auth/mongoDBAuth/tokenAdapter';
 
@@ -71,7 +69,6 @@ async function loadAdapters() {
 			const { MongoDBAdapter } = await import('./mongodb/mongoDBAdapter');
 			dbAdapter = new MongoDBAdapter();
 			const userAdapter = new UserAdapter();
-			const roleAdapter = new RoleAdapter();
 			const sessionAdapter = new SessionAdapter();
 			const tokenAdapter = new TokenAdapter();
 
@@ -101,24 +98,8 @@ async function loadAdapters() {
 				getAllTokens: tokenAdapter.getAllTokens.bind(tokenAdapter),
 				deleteExpiredTokens: tokenAdapter.deleteExpiredTokens.bind(tokenAdapter),
 
-				// Role Management Methods
-				createRole: roleAdapter.createRole.bind(roleAdapter),
-				updateRole: roleAdapter.updateRole.bind(roleAdapter),
-				updateUserRole: roleAdapter.updateUserRole.bind(roleAdapter),
-				deleteRole: roleAdapter.deleteRole.bind(roleAdapter),
-				getRoleByName: roleAdapter.getRoleByName.bind(roleAdapter),
-				getAllRoles: roleAdapter.getAllRoles.bind(roleAdapter),
-				setAllRoles: roleAdapter.setAllRoles.bind(roleAdapter),
-
-				// Permission Management Methods
-				getAllPermissions,
-				getPermissionByName,
-				updatePermission: roleAdapter.updatePermission.bind(roleAdapter),
-				deletePermission: roleAdapter.deletePermission.bind(roleAdapter),
-
 				// Sync Methods
-				syncRolesWithConfig: roleAdapter.syncRolesWithConfig.bind(roleAdapter),
-				syncPermissionsWithConfig: syncPermissions
+				syncRolesWithConfig: async () => {} // This is a no-op now that roles are managed via config files
 			} as authDBInterface;
 
 			logger.info('MongoDB adapters loaded successfully.');
@@ -205,7 +186,7 @@ async function initializeMediaFolder() {
 	}
 }
 
-// Initialize virtual folders// Initialize virtual folders
+// Initialize virtual folders
 async function initializeVirtualFolders() {
 	if (!dbAdapter) {
 		throw new Error('Database adapter not initialized');
@@ -242,6 +223,7 @@ async function initializeAdapters(): Promise<void> {
 			if (Object.keys(collections).length === 0) {
 				throw new Error('No collections found after initialization');
 			}
+
 			if (!dbAdapter) {
 				throw new Error('Database adapter not initialized');
 			}
@@ -252,14 +234,14 @@ async function initializeAdapters(): Promise<void> {
 			await dbAdapter.setupMediaModels();
 			await dbAdapter.getCollectionModels();
 
-			await syncPermissions();
+			if (authAdapter) {
+				await authAdapter.syncRolesWithConfig(); // Sync roles only
+			} else {
+				throw new Error('Authentication adapter not initialized');
+			}
 		}
 
-		if (!authAdapter) {
-			throw new Error('Authentication adapter not initialized');
-		}
-
-		auth = new Auth(authAdapter);
+		auth = new Auth(authAdapter!);
 		logger.debug('Authentication adapter initialized.');
 
 		isInitialized = true;

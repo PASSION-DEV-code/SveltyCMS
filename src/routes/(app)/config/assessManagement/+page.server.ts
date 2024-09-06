@@ -7,14 +7,17 @@ import { redirect, error } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 
 // Auth
-import { auth, authAdapter, initializationPromise } from '@src/databases/db';
+import { auth, initializationPromise } from '@src/databases/db';
 import { SESSION_COOKIE_NAME } from '@src/auth';
 import { checkUserPermission, type PermissionConfig } from '@src/auth/permissionCheck';
 import { PermissionAction } from '@root/config/permissions';
 
+// Import roles and permissions directly from configuration files
+import { roles } from '@root/config/roles';
+import { getAllPermissions } from '@root/config/permissions';
+
 // System Logs
 import logger from '@src/utils/logger';
-import { writable } from 'svelte/store';
 
 export const load: PageServerLoad = async ({ cookies }) => {
 	logger.debug('Starting load function for assess management page');
@@ -24,7 +27,7 @@ export const load: PageServerLoad = async ({ cookies }) => {
 		await initializationPromise;
 		logger.debug('Initialization complete.');
 
-		if (!auth || !authAdapter) {
+		if (!auth) {
 			logger.error('Authentication system is not initialized');
 			throw error(500, 'Internal Server Error: Auth system not initialized');
 		}
@@ -62,7 +65,7 @@ export const load: PageServerLoad = async ({ cookies }) => {
 		const permissionConfig: PermissionConfig = {
 			contextId: 'config/assessManagement',
 			requiredRole: 'admin',
-			action: PermissionAction.READ, // Correctly set the action using PermissionAction enum
+			action: PermissionAction.READ,
 			contextType: 'system'
 		};
 
@@ -78,9 +81,9 @@ export const load: PageServerLoad = async ({ cookies }) => {
 			}
 		}
 
-		// Fetch roles and permissions in parallel
+		// Fetch roles and permissions from configuration files
 		logger.debug('Fetching roles and permissions...');
-		const [roles, permissions] = await Promise.all([authAdapter.getAllRoles(), authAdapter.getAllPermissions()]);
+		const permissions = getAllPermissions();
 
 		logger.debug(`Roles fetched: ${roles.length}`);
 		roles.forEach((role) => logger.debug(`Role: ${JSON.stringify(role)}`));

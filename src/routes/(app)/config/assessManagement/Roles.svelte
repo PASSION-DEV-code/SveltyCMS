@@ -347,3 +347,14 @@ It provides the following functionality:
 		</div>
 	</div>
 {/if}
+
+<style>
+	.role {
+		height: calc(100vh - 350px);
+	}
+	@media screen and (max-width: 625px) {
+		.role {
+			height: 280px;
+		}
+	}
+</style>

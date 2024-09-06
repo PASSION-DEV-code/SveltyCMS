@@ -4,7 +4,6 @@
  *
  * This module provides a complete implementation of the authDBInterface using Drizzle ORM:
  * - User management
- * - Role and permission management
  * - Session and token handling
  *
  * Features:
@@ -18,47 +17,16 @@
  */
 
 import { eq, and, sql } from 'drizzle-orm';
-import { users, roles, permissions, rolePermissions, sessions, tokens } from './Schema';
+import { users, sessions, tokens } from './Schema';
 import type { authDBInterface } from '../authDBInterface';
-import type { User, Role, Permission, Session, Token } from '../types';
+import type { User, Session, Token } from '../types';
 import { db } from '@src/databases/drizzleDBAdapter';
+import crypto from 'crypto';
 
 // Import logger
 import logger from '@src/utils/logger';
 
-// Import config roles and permissions
-import { roles } from '@src/config/roles';
-import { permissions } from '@src/config/permissions';
-
 export class DrizzleAuthAdapter implements authDBInterface {
-	// Initialize default roles and permissions from configuration
-	async initializeDefaultRolesAndPermissions(): Promise<void> {
-		// Initialize roles and permissions in the database from configuration
-		await db.transaction(async (trx) => {
-			// Insert default roles
-			for (const role of configRoles) {
-				await trx.insert(roles).values(role).onConflictDoNothing();
-			}
-
-			// Insert default permissions
-			for (const permission of configPermissions) {
-				await trx.insert(permissions).values(permission).onConflictDoNothing();
-			}
-
-			// Assign permissions to roles based on configuration
-			for (const role of configRoles) {
-				for (const permissionId of role.permissions) {
-					const rolePermission = {
-						roleId: role._id,
-						permissionId: permissionId
-					};
-					await trx.insert(rolePermissions).values(rolePermission).onConflictDoNothing();
-				}
-			}
-		});
-		logger.info('Default roles and permissions initialized successfully from configuration.');
-	}
-
 	// User Management Methods
 	async createUser(userData: Partial<User>): Promise<User> {
 		try {
@@ -132,10 +100,13 @@ export class DrizzleAuthAdapter implements authDBInterface {
 	// Get the count of users
 	async getUserCount(filter?: object): Promise<number> {
 		try {
-			const result = await db
-				.select({ count: sql`count(*)` })
-				.from(users)
-				.get();
+			let query = db.select({ count: sql`count(*)` }).from(users);
+
+			if (filter) {
+				query = query.where(filter);
+			}
+
+			const result = await query.get();
 			return result?.count as number;
 		} catch (error) {
 			logger.error(`Failed to get user count: ${(error as Error).message}`);
@@ -329,299 +300,6 @@ export class DrizzleAuthAdapter implements authDBInterface {
 			return result[0]?.count as number;
 		} catch (error) {
 			logger.error(`Failed to delete expired tokens: ${(error as Error).message}`);
-			throw error;
-		}
-	}
-
-	// Role Management Methods
-	async createRole(roleData: Partial<Role>): Promise<Role> {
-		try {
-			const [role] = await db.insert(roles).values(roleData).returning();
-			return role as Role;
-		} catch (error) {
-			logger.error(`Failed to create role: ${(error as Error).message}`);
-			throw error;
-		}
-	}
-
-	async updateRole(role_id: string, roleData: Partial<Role>): Promise<void> {
-		try {
-			await db.update(roles).set(roleData).where(eq(roles.id, role_id));
-		} catch (error) {
-			logger.error(`Failed to update role: ${(error as Error).message}`);
-			throw error;
-		}
-	}
-
-	async deleteRole(role_id: string): Promise<void> {
-		try {
-			await db.delete(roles).where(eq(roles.id, role_id));
-		} catch (error) {
-			logger.error(`Failed to delete role: ${(error as Error).message}`);
-			throw error;
-		}
-	}
-
-	async getRoleById(role_id: string): Promise<Role | null> {
-		try {
-			const role = await db.select().from(roles).where(eq(roles.id, role_id)).get();
-			return role ? (role as Role) : null;
-		} catch (error) {
-			logger.error(`Failed to get role by ID: ${(error as Error).message}`);
-			throw error;
-		}
-	}
-
-	async getAllRoles(options?: { limit?: number; skip?: number; sort?: object; filter?: object }): Promise<Role[]> {
-		try {
-			let query = db.select().from(roles);
-			if (options?.filter) query = query.where(options.filter);
-			if (options?.sort) query = query.orderBy(options.sort);
-			if (options?.limit) query = query.limit(options.limit);
-			if (options?.skip) query = query.offset(options.skip);
-			const roles = await query;
-			return roles as Role[];
-		} catch (error) {
-			logger.error(`Failed to get all roles: ${(error as Error).message}`);
-			throw error;
-		}
-	}
-
-	async getRoleByName(name: string): Promise<Role | null> {
-		try {
-			const role = await db.select().from(roles).where(eq(roles.name, name)).get();
-			return role ? (role as Role) : null;
-		} catch (error) {
-			logger.error(`Failed to get role by name: ${(error as Error).message}`);
-			throw error;
-		}
-	}
-
-	// Permission Management Methods
-	async createPermission(permissionData: Partial<Permission>): Promise<Permission> {
-		try {
-			const [permission] = await db.insert(permissions).values(permissionData).returning();
-			return permission as Permission;
-		} catch (error) {
-			logger.error(`Failed to create permission: ${(error as Error).message}`);
-			throw error;
-		}
-	}
-
-	async updatePermission(permission_id: string, permissionData: Partial<Permission>): Promise<void> {
-		try {
-			await db.update(permissions).set(permissionData).where(eq(permissions.id, permission_id));
-		} catch (error) {
-			logger.error(`Failed to update permission: ${(error as Error).message}`);
-			throw error;
-		}
-	}
-
-	async deletePermission(permission_id: string): Promise<void> {
-		try {
-			await db.delete(permissions).where(eq(permissions.id, permission_id));
-		} catch (error) {
-			logger.error(`Failed to delete permission: ${(error as Error).message}`);
-			throw error;
-		}
-	}
-
-	async getPermissionById(permission_id: string): Promise<Permission | null> {
-		try {
-			const permission = await db.select().from(permissions).where(eq(permissions.id, permission_id)).get();
-			return permission ? (permission as Permission) : null;
-		} catch (error) {
-			logger.error(`Failed to get permission by ID: ${(error as Error).message}`);
-			throw error;
-		}
-	}
-
-	async getAllPermissions(options?: { limit?: number; skip?: number; sort?: object; filter?: object }): Promise<Permission[]> {
-		try {
-			let query = db.select().from(permissions);
-			if (options?.filter) query = query.where(options.filter);
-			if (options?.sort) query = query.orderBy(options.sort);
-			if (options?.limit) query = query.limit(options.limit);
-			if (options?.skip) query = query.offset(options.skip);
-			const permissions = await query;
-			return permissions as Permission[];
-		} catch (error) {
-			logger.error(`Failed to get all permissions: ${(error as Error).message}`);
-			throw error;
-		}
-	}
-
-	async getPermissionByName(name: string): Promise<Permission | null> {
-		try {
-			const permission = await db.select().from(permissions).where(eq(permissions.name, name)).get();
-			return permission ? (permission as Permission) : null;
-		} catch (error) {
-			logger.error(`Failed to get permission by name: ${(error as Error).message}`);
-			throw error;
-		}
-	}
-
-	// Role-Permissions Linking Methods
-	async assignPermissionToRole(role_id: string, permission_id: string): Promise<void> {
-		try {
-			await db.insert(rolePermissions).values({ roleId: role_id, permissionId: permission_id }).onConflictDoNothing();
-		} catch (error) {
-			logger.error(`Failed to assign permission to role: ${(error as Error).message}`);
-			throw error;
-		}
-	}
-
-	async deletePermissionFromRole(role_id: string, permission_id: string): Promise<void> {
-		try {
-			await db.delete(rolePermissions).where(and(eq(rolePermissions.roleId, role_id), eq(rolePermissions.permissionId, permission_id)));
-		} catch (error) {
-			logger.error(`Failed to delete permission from role: ${(error as Error).message}`);
-			throw error;
-		}
-	}
-
-	async getPermissionsForRole(role_id: string): Promise<Permission[]> {
-		try {
-			const rolePerms = await db
-				.select(permissions)
-				.from(rolePermissions)
-				.join(permissions)
-				.on(eq(rolePermissions.permissionId, permissions.id))
-				.where(eq(rolePermissions.roleId, role_id));
-			return rolePerms as Permission[];
-		} catch (error) {
-			logger.error(`Failed to get permissions for role: ${(error as Error).message}`);
-			throw error;
-		}
-	}
-
-	async getRolesForPermission(permission_id: string): Promise<Role[]> {
-		try {
-			const rolesWithPerm = await db
-				.select(roles)
-				.from(rolePermissions)
-				.join(roles)
-				.on(eq(rolePermissions.roleId, roles.id))
-				.where(eq(rolePermissions.permissionId, permission_id));
-			return rolesWithPerm as Role[];
-		} catch (error) {
-			logger.error(`Failed to get roles for permission: ${(error as Error).message}`);
-			throw error;
-		}
-	}
-
-	// User-Specific Permissions Methods
-	async assignPermissionToUser(user_id: string, permission_id: string): Promise<void> {
-		try {
-			await db
-				.update(users)
-				.set({ permissions: db.raw('JSON_ARRAY_APPEND(permissions, "$", ?)', [permission_id]) })
-				.where(eq(users.id, user_id));
-		} catch (error) {
-			logger.error(`Failed to assign permission to user: ${(error as Error).message}`);
-			throw error;
-		}
-	}
-
-	async deletePermissionFromUser(user_id: string, permission_id: string): Promise<void> {
-		try {
-			await db
-				.update(users)
-				.set({ permissions: db.raw('JSON_REMOVE(permissions, JSON_UNQUOTE(JSON_SEARCH(permissions, "one", ?)))', [permission_id]) })
-				.where(eq(users.id, user_id));
-		} catch (error) {
-			logger.error(`Failed to remove permission from user: ${(error as Error).message}`);
-			throw error;
-		}
-	}
-
-	async getPermissionsForUser(user_id: string): Promise<Permission[]> {
-		try {
-			const user = await db.select().from(users).where(eq(users.id, user_id)).get();
-			return user ? (user.permissions as Permission[]) : [];
-		} catch (error) {
-			logger.error(`Failed to get permissions for user: ${(error as Error).message}`);
-			throw error;
-		}
-	}
-
-	async getUsersWithPermission(permission_id: string): Promise<User[]> {
-		try {
-			const usersWithPerm = await db
-				.select(users)
-				.from(users)
-				.where(db.raw('JSON_SEARCH(permissions, "one", ?)', [permission_id]));
-			return usersWithPerm as User[];
-		} catch (error) {
-			logger.error(`Failed to get users with permission: ${(error as Error).message}`);
-			throw error;
-		}
-	}
-
-	// User-Role Methods
-	async assignRoleToUser(user_id: string, role_id: string): Promise<void> {
-		try {
-			await db
-				.update(users)
-				.set({ roles: db.raw('JSON_ARRAY_APPEND(roles, "$", ?)', [role_id]) })
-				.where(eq(users.id, user_id));
-		} catch (error) {
-			logger.error(`Failed to assign role to user: ${(error as Error).message}`);
-			throw error;
-		}
-	}
-
-	async removeRoleFromUser(user_id: string, role_id: string): Promise<void> {
-		try {
-			await db
-				.update(users)
-				.set({ roles: db.raw('JSON_REMOVE(roles, JSON_UNQUOTE(JSON_SEARCH(roles, "one", ?)))', [role_id]) })
-				.where(eq(users.id, user_id));
-		} catch (error) {
-			logger.error(`Failed to remove role from user: ${(error as Error).message}`);
-			throw error;
-		}
-	}
-
-	async getRolesForUser(user_id: string): Promise<Role[]> {
-		try {
-			const user = await db.select().from(users).where(eq(users.id, user_id)).get();
-			return user ? (user.roles as Role[]) : [];
-		} catch (error) {
-			logger.error(`Failed to get roles for user: ${(error as Error).message}`);
-			throw error;
-		}
-	}
-
-	async getUsersWithRole(role_id: string): Promise<User[]> {
-		try {
-			const usersWithRole = await db
-				.select(users)
-				.from(users)
-				.where(db.raw('JSON_SEARCH(roles, "one", ?)', [role_id]));
-			return usersWithRole as User[];
-		} catch (error) {
-			logger.error(`Failed to get users with role: ${(error as Error).message}`);
-			throw error;
-		}
-	}
-
-	async checkUserPermission(user_id: string, permission_name: string): Promise<boolean> {
-		try {
-			const userPermissions = await this.getPermissionsForUser(user_id);
-			return userPermissions.some((permission) => permission.name === permission_name);
-		} catch (error) {
-			logger.error(`Failed to check user permission: ${(error as Error).message}`);
-			throw error;
-		}
-	}
-
-	async checkUserRole(user_id: string, role_name: string): Promise<boolean> {
-		try {
-			const userRoles = await this.getRolesForUser(user_id);
-			return userRoles.some((role) => role.name === role_name);
-		} catch (error) {
-			logger.error(`Failed to check user role: ${(error as Error).message}`);
 			throw error;
 		}
 	}

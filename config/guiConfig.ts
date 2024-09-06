@@ -1,5 +1,5 @@
 /**
- * @file guiConfig.ts
+ * @file  /src/config/guiConfig.ts
  * @description This file defines and organizes configuration categories for a system's
  * graphical user interface (GUI). The configurations are grouped into private and
  * public categories, each containing fields with various settings, including database

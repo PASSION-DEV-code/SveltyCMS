@@ -1,3 +1,6 @@
+// @file src/collections/types.ts
+// @description Configuration prompts for the Collections section
+
 import type widgets from '@components/widgets';
 
 // Auth
@@ -47,5 +50,6 @@ export type CollectionContent = {
 		'RichText'
 	];
 };
+
 
 export type CollectionNames = 'ImageArray'|'Media'|'Menu'|'Names'|'Posts'|'Relation'|'WidgetTest';

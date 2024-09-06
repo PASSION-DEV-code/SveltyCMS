@@ -58,27 +58,25 @@ export default defineConfig({
 
 					delete require.cache[require.resolve(permissionsPath)];
 					delete require.cache[require.resolve(rolesPath)];
-
 					// Dynamically reimport updated roles & permissions
-					const { roles } = await import('./config/roles');
-					const { permissions } = await import('./config/permissions');
+					const { roles } = await import('@root/config/roles');
+					const { getAllPermissions } = await import('@root/config/permissions');
 
 					// Update roles and permissions in the application
 					const { setLoadedRoles, setLoadedPermissions } = await import('./src/auth/types');
 					setLoadedRoles(roles);
-					setLoadedPermissions(permissions);
+					setLoadedPermissions(getAllPermissions());
 
 					console.log('Roles and permissions reloaded from config');
 
 					// Trigger HMR for affected modules
+					// Uncomment this line if you want to trigger a full reload
 					// server.ws.send({ type: 'full-reload' });
 				} else if (/src[/\\]collections/.test(file)) {
-					if (/src[/\\]collections/.test(file)) {
-						// Recompile collections and update types
-						await compile({ collectionsFolderJS, collectionsFolderTS });
-						generateCollectionTypes();
-						generateCollectionFieldTypes();
-					}
+					// Recompile collections and update types
+					await compile({ collectionsFolderJS, collectionsFolderTS });
+					generateCollectionTypes();
+					generateCollectionFieldTypes();
 				}
 			},
 			config() {

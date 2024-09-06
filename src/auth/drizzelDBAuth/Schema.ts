@@ -4,8 +4,6 @@
  *
  * This module defines the database schema for:
  * - Users
- * - Roles
- * - Permissions
  * - Sessions
  * - Tokens
  *
@@ -18,7 +16,7 @@
  * Imported by the Drizzle auth adapter to create and interact with the database schema
  */
 
-import { sqliteTable, text, integer, primaryKey, index } from 'drizzle-orm/sqlite-core';
+import { sqliteTable, text, integer, index } from 'drizzle-orm/sqlite-core';
 import { sql } from 'drizzle-orm';
 
 // Define the Users table
@@ -45,47 +43,6 @@ export const users = sqliteTable('users', {
 	createdAt: integer('created_at', { mode: 'timestamp' }).default(sql`CURRENT_TIMESTAMP`),
 	updatedAt: integer('updated_at', { mode: 'timestamp' }).default(sql`CURRENT_TIMESTAMP`)
 });
-
-// Define the Roles table
-export const roles = sqliteTable('roles', {
-	id: text('id').primaryKey(),
-	name: text('name').notNull().unique(),
-	description: text('description'),
-	createdAt: integer('created_at', { mode: 'timestamp' }).default(sql`CURRENT_TIMESTAMP`),
-	updatedAt: integer('updated_at', { mode: 'timestamp' }).default(sql`CURRENT_TIMESTAMP`)
-});
-
-// Define the Permissions table
-export const permissions = sqliteTable('permissions', {
-	id: text('id').primaryKey(),
-	name: text('name').notNull().unique(),
-	action: text('action').notNull(),
-	contextId: text('context_id').notNull(),
-	contextType: text('context_type').notNull(),
-	description: text('description'),
-	requiredRole: text('required_role').notNull(),
-	requires2FA: integer('requires_2fa', { mode: 'boolean' }).default(false),
-	createdAt: integer('created_at', { mode: 'timestamp' }).default(sql`CURRENT_TIMESTAMP`),
-	updatedAt: integer('updated_at', { mode: 'timestamp' }).default(sql`CURRENT_TIMESTAMP`)
-});
-
-// Define the RolePermissions junction table
-export const rolePermissions = sqliteTable(
-	'role_permissions',
-	{
-		roleId: text('role_id')
-			.notNull()
-			.references(() => roles.id),
-		permissionId: text('permission_id')
-			.notNull()
-			.references(() => permissions.id),
-		createdAt: integer('created_at', { mode: 'timestamp' }).default(sql`CURRENT_TIMESTAMP`),
-		updatedAt: integer('updated_at', { mode: 'timestamp' }).default(sql`CURRENT_TIMESTAMP`)
-	},
-	(table) => ({
-		pk: primaryKey(table.roleId, table.permissionId) // Composite primary key for role-permission mapping
-	})
-);
 
 // Define the Sessions table
 export const sessions = sqliteTable('sessions', {
@@ -114,8 +71,6 @@ export const tokens = sqliteTable('tokens', {
 // Create indexes for optimizing queries
 export const indexes = {
 	userIndex: index(users, ['email']),
-	roleIndex: index(roles, ['name']),
-	permissionIndex: index(permissions, ['name']),
 	sessionUserIdIndex: index(sessions, ['userId']),
 	tokenUserIdIndex: index(tokens, ['userId'])
 };

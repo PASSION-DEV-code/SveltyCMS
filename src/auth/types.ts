@@ -72,6 +72,12 @@ export function isAdminRole(roleName: string): boolean {
 	return roleName.toLowerCase() === 'admin';
 }
 
+// // Checks if a role is an admin role.
+// export function isAdminRole(roleName: string, roles: Role[] = getAllRoles()): boolean {
+// 	const role = roles.find((role) => role.name.toLowerCase() === roleName.toLowerCase());
+// 	return role?.isAdmin ?? false; // Return false if role is not found or isAdmin is undefined
+// }
+
 // Retrieves a role by its name
 export function getRoleByName(roleName: string): Role | undefined {
 	return loadedRoles.find((role) => role.name.toLowerCase() === roleName.toLowerCase());

@@ -1,7 +1,3 @@
-<!-- 
-@files src/routes/(app)/config/+page.svelte
-@description This file sets up and displays the config page. It provides a user-friendly interface for managing configuration settings. 
--->
 <script lang="ts">
 	// Component imports
 	import PageTitle from '@components/PageTitle.svelte';
@@ -11,23 +7,39 @@
 	// ParaglideJS imports
 	import * as m from '@src/paraglide/messages';
 
+	// Import PermissionConfig type from permissionCheck.ts
+	import type { PermissionConfig } from '@src/auth/permissionCheck';
+
+	// Define the structure of the permissionConfigs object
+	type PermissionConfigs = Record<string, PermissionConfig>;
+
+	// Default to empty array if permissions are not provided
+	let permissions: PermissionConfig[] = [];
+	let permissionConfigs: PermissionConfigs = {};
+
 	// Get server-side data
-	$: user = $page.data.user; // User information from server
-	$: permissions = $page.data.permissions; // Permission data from server
-	$: dynamicPermissions = $page.data.allPermissions; // Dynamically loaded permissions
+	$: {
+		if ($page.data.allPermissions) {
+			permissions = $page.data.allPermissions;
+		}
+	}
 
 	// Create a mapping from contextId to dynamic permissions for easier access
-	$: permissionConfigs = Object.fromEntries(
-		dynamicPermissions.map((permission) => [
-			console.log(permission) || permission._id.split(':')[1], // Extract the contextId from permission id (e.g., 'collectionbuilder' from 'config:collectionbuilder')
-			{
+	$: {
+		permissionConfigs = permissions.reduce<PermissionConfigs>((configs, permission) => {
+			const contextId = permission._id.split(':')[1]; // Extract contextId from _id
+			configs[contextId] = {
+				_id: permission._id, // Ensure all required properties are included
+				name: permission.name,
 				contextId: permission._id,
-				requiredRole: permission.name, // Assuming `name` holds the required role. Adjust if necessary.
 				action: permission.action,
-				contextType: permission.type
-			}
-		])
-	);
+				contextType: permission.contextType,
+				requiredRole: permission.requiredRole || '', // Use default value if requiredRole is missing
+				description: permission.description || '' // Use default value if description is missing
+			};
+			return configs;
+		}, {});
+	}
 </script>
 
 <!-- Page Title -->
@@ -123,6 +135,11 @@
 				<p class="config-text">Access Management</p>
 			</a>
 		</PermissionGuard>
+
+		<a href="/config/assessManagement" class="config-btn variant-ghost-error" aria-label="Access Management">
+			<iconify-icon icon="mdi:account-group" class="config-icon text-white" />
+			<p class="config-text">Access Management</p>
+		</a>
 	</div>
 </div>
 

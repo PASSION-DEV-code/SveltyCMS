@@ -214,17 +214,17 @@
 				</p>
 			{/if}
 			<div class="permission overflow-auto">
-				<table class="compact w-full table-auto border-separate rounded border border-surface-200">
+				<table class="compact w-full table-auto border">
 					<!-- Header -->
-					<thead class="sticky top-0 border border-b border-surface-200 bg-black">
-						<tr class="divide-x border-b text-tertiary-500 dark:text-primary-500">
-							<th class="px-4 py-2">Type</th>
-							<th class="px-4 py-2">Action</th>
+					<thead class="sticky top-0 border border-surface-200 bg-surface-800">
+						<tr class="divide-x text-tertiary-500 dark:text-primary-500">
+							<th class="py-2">Type</th>
+							<th>Action</th>
 
 							<!-- List only non-admin roles -->
 							{#each $roles as role}
 								{#if !role.isAdmin}
-									<th class="px-4 py-2 text-center">{role.name}</th>
+									<th>{role.name}</th>
 								{/if}
 							{/each}
 						</tr>
@@ -232,35 +232,36 @@
 					<tbody>
 						<!-- Permission Groups -->
 						{#each groups as group}
-							<tr>
-								<td
-									colSpan={nonAdminRolesCount + 2}
-									class="bg-gray-800 px-4 py-2 font-semibold text-tertiary-500 text-white dark:text-primary-500 lg:text-left lg:text-center"
-									>{group}</td
-								>
-							</tr>
-							{#each filterGroups(filteredPermissions, group) as permission}
-								<tr class="divide-x border-b">
-									<!-- Type -->
-									<td class="px-1 py-1">{permission._id}</td>
-									<!-- Action -->
-									<td class="px-1 py-1 text-center">{permission.action}</td>
-
-									<!-- Roles -->
-									{#each $roles as role}
-										{#if !role.isAdmin}
-											<td class="px-1 py-1 text-center">
-												<input
-													type="checkbox"
-													checked={role.permissions.includes(permission._id)}
-													on:change={() => toggleRole(permission._id, role._id)}
-													class="form-checkbox"
-												/>
-											</td>
-										{/if}
-									{/each}
+							{#if filterGroups(filteredPermissions, group).length > 0}
+								<!-- Group Name -->
+								<tr>
+									<td
+										colspan={nonAdminRolesCount + 2}
+										class="border-b bg-surface-500 px-1 py-2 font-semibold text-tertiary-500 text-white dark:text-primary-500 lg:text-left lg:text-center"
+									>
+										{group}:
+									</td>
 								</tr>
-							{/each}
+								<!-- Permissions within the Group -->
+								{#each filterGroups(filteredPermissions, group) as permission}
+									<tr class="divide-x border-b text-center">
+										<td class="px-1 py-1">{permission.name}</td>
+										<td class="px-1 py-1">{permission.action}</td>
+										{#each $roles as role}
+											{#if !role.isAdmin}
+												<td class="px-1 py-1">
+													<input
+														type="checkbox"
+														checked={role.permissions.includes(permission._id)}
+														on:change={() => toggleRole(permission._id, role._id)}
+														class="form-checkbox"
+													/>
+												</td>
+											{/if}
+										{/each}
+									</tr>
+								{/each}
+							{/if}
 						{/each}
 					</tbody>
 				</table>
@@ -268,3 +269,14 @@
 		{/if}
 	</div>
 {/if}
+
+<style>
+	.permission {
+		height: calc(100vh - 400px);
+	}
+	@media screen and (max-width: 625px) {
+		.permission {
+			height: 250px;
+		}
+	}
+</style>

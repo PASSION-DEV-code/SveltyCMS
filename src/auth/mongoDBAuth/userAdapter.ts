@@ -10,22 +10,17 @@
  * Features:
  * - CRUD operations for users
  * - User schema definition
- * - User-role and user-permission associations
  * - Password hashing and verification
  * - Integration with MongoDB through Mongoose
  *
  * Usage:
- * Utilized by the auth system to manage user accounts in a MongoDB database
+ * Utilized by the auth system to manage user accounts in a MongoDB database.
  */
 
 import mongoose, { Schema, Document, Model } from 'mongoose';
 
-// Adapter
-import { RoleSchema } from './roleAdapter';
-import { getPermissionByName, getAllPermissions } from '../permissionManager';
-
 // Types
-import type { Permission, Role, User } from '../types';
+import type { User } from '../types';
 import type { authDBInterface } from '../authDBInterface';
 
 // System Logging
@@ -59,11 +54,9 @@ export const UserSchema = new Schema(
 
 export class UserAdapter implements Partial<authDBInterface> {
 	private UserModel: Model<User & Document>;
-	private RoleModel: Model<Role & Document>;
 
 	constructor() {
 		this.UserModel = mongoose.models.auth_users || mongoose.model<User & Document>('auth_users', UserSchema);
-		this.RoleModel = mongoose.models.auth_roles || mongoose.model<Role & Document>('auth_roles', RoleSchema);
 	}
 
 	// Create a new user
@@ -91,100 +84,6 @@ export class UserAdapter implements Partial<authDBInterface> {
 		} catch (error) {
 			logger.error(`Failed to update user attributes for user ID: ${user_id}`, { error });
 			throw new Error(`Failed to update user attributes: ${error instanceof Error ? error.message : JSON.stringify(error)}`);
-		}
-	}
-
-	// Assign a permission to a user
-	async assignPermissionToUser(user_id: string, permissionName: string): Promise<void> {
-		const permission = getPermissionByName(permissionName);
-		if (!permission) {
-			logger.warn(`Permission not found: ${permissionName}`);
-			throw new Error('Permission not found');
-		}
-		try {
-			await this.UserModel.findByIdAndUpdate(user_id, { $addToSet: { permissions: permissionName } });
-			logger.info(`Permission ${permissionName} assigned to user ${user_id}`);
-		} catch (error) {
-			logger.error(`Failed to assign permission to user: ${(error as Error).message}`);
-			throw error;
-		}
-	}
-
-	// Remove a permission from a user
-	async deletePermissionFromUser(user_id: string, permissionName: string): Promise<void> {
-		try {
-			await this.UserModel.findByIdAndUpdate(user_id, { $pull: { permissions: permissionName } });
-			logger.info(`Permission ${permissionName} removed from user ${user_id}`);
-		} catch (error) {
-			logger.error(`Failed to remove permission from user: ${(error as Error).message}`);
-			throw error;
-		}
-	}
-
-	// Get permissions for a user
-	async getPermissionsForUser(user_id: string): Promise<Permission[]> {
-		try {
-			const user = await this.UserModel.findById(user_id).lean();
-			if (!user) {
-				logger.warn(`User not found: ${user_id}`);
-				return [];
-			}
-
-			const directPermissions = new Set(user.permissions || []);
-			const allPermissions = await getAllPermissions();
-			const userPermissions = allPermissions.filter((perm) => directPermissions.has(perm.name));
-
-			if (user.role) {
-				const role = await this.RoleModel.findOne({ name: user.role }).lean();
-				if (role) {
-					const rolePermissions = new Set(role.permissions || []);
-					const roleBasedPermissions = allPermissions.filter((perm) => rolePermissions.has(perm.name));
-					userPermissions.push(...roleBasedPermissions);
-				}
-			}
-
-			const uniquePermissions = Array.from(new Set(userPermissions.map((p) => p.name))).map((name) =>
-				userPermissions.find((p) => p.name === name)
-			) as Permission[];
-
-			logger.debug(`Permissions retrieved for user: ${user_id}`);
-			return uniquePermissions;
-		} catch (error) {
-			logger.error(`Failed to get permissions for user: ${(error as Error).message}`);
-			throw error;
-		}
-	}
-
-	// Check if a user has a specific permission
-	async checkUserPermission(user_id: string, permissionName: string): Promise<boolean> {
-		try {
-			const user = await this.UserModel.findById(user_id).lean();
-			if (!user) {
-				logger.warn(`User not found: ${user_id}`);
-				return false;
-			}
-
-			const directPermissions = new Set(user.permissions || []);
-			const hasDirectPermission = directPermissions.has(permissionName);
-			if (hasDirectPermission) {
-				return true;
-			}
-
-			if (user.role) {
-				const role = await this.RoleModel.findOne({ name: user.role }).lean();
-				if (role) {
-					const rolePermissions = new Set(role.permissions || []);
-					if (rolePermissions.has(permissionName)) {
-						return true;
-					}
-				}
-			}
-
-			logger.debug(`User ${user_id} does not have permission: ${permissionName}`);
-			return false;
-		} catch (error) {
-			logger.error(`Failed to check user permission: ${(error as Error).message}`);
-			throw error;
 		}
 	}
 
@@ -293,55 +192,6 @@ export class UserAdapter implements Partial<authDBInterface> {
 			return count;
 		} catch (error) {
 			logger.error(`Failed to get user count: ${(error as Error).message}`);
-			throw error;
-		}
-	}
-
-	// Get users with a permission
-	async getUsersWithPermission(permissionName: string): Promise<User[]> {
-		try {
-			const users = await this.UserModel.find({ permissions: permissionName }).lean();
-			logger.debug(`Users with permission ${permissionName} retrieved`);
-			return users;
-		} catch (error) {
-			logger.error(`Failed to get users with permission: ${(error as Error).message}`);
-			throw error;
-		}
-	}
-
-	// Assign a role to a user
-	async assignRoleToUser(user_id: string, role: string): Promise<void> {
-		try {
-			await this.UserModel.findByIdAndUpdate(user_id, { role });
-			logger.info(`Role ${role} assigned to user ${user_id}`);
-		} catch (error) {
-			logger.error(`Failed to assign role to user: ${(error as Error).message}`);
-			throw error;
-		}
-	}
-
-	// Remove a role from a user
-	async removeRoleFromUser(user_id: string): Promise<void> {
-		try {
-			await this.UserModel.findByIdAndUpdate(user_id, { $unset: { role: '' } });
-			logger.info(`Role removed from user ${user_id}`);
-		} catch (error) {
-			logger.error(`Failed to remove role from user: ${(error as Error).message}`);
-			throw error;
-		}
-	}
-
-	// Get roles for a user
-	async getRolesForUser(user_id: string): Promise<Role[]> {
-		try {
-			const user = await this.UserModel.findById(user_id).lean();
-			if (!user) {
-				return [];
-			}
-			const role = await this.RoleModel.findOne({ name: user.role }).lean();
-			return role ? [role] : [];
-		} catch (error) {
-			logger.error(`Failed to get roles for user: ${(error as Error).message}`);
 			throw error;
 		}
 	}

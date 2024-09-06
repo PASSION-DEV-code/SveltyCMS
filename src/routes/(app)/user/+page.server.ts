@@ -26,15 +26,9 @@ import type { PageServerLoad } from './$types';
 // Auth
 import { auth } from '@src/databases/db';
 import { SESSION_COOKIE_NAME } from '@src/auth';
-import type { User, Role } from '@src/auth/types';
-import { registerPermissions, PermissionAction, PermissionType } from '@root/config/permissions';
-
-// Dynamically register permissions for user management
-const userManagementPermissions = [
-	{ _id: 'user:manage', name: 'Manage Users', action: PermissionAction.MANAGE, type: PermissionType.USER, description: 'Allows management of users.' }
-];
-
-registerPermissions(userManagementPermissions); // Register dynamic permissions
+import type { User, Token } from '@src/auth/types';
+import { getAllRoles } from '@root/config/roles';
+import { PermissionAction, PermissionType } from '@root/config/permissions';
 
 // Superforms
 import { superValidate } from 'sveltekit-superforms/server';
@@ -47,6 +41,37 @@ import logger from '@src/utils/logger';
 // Import the checkUserPermission function to check permissions
 import { checkUserPermission, type PermissionConfig } from '@src/auth/permissionCheck';
 
+// Track registered permissions to avoid duplicates
+const registeredPermissions = new Set<string>();
+
+// Dynamically register permissions for user management
+const userManagementPermissions: PermissionConfig[] = [
+	{
+		_id: 'user:manage',
+		name: 'Manage Users',
+		description: 'Allows management of users.',
+		action: PermissionAction.MANAGE,
+		type: PermissionType.USER, // Categorize as user-level permission
+		contextId: 'config/userManagement'
+	}
+	// Add more permissions as needed
+];
+
+function registerPermissions() {
+	// Register permissions only if they haven't been registered already
+	userManagementPermissions.forEach((permission) => {
+		if (registeredPermissions.has(permission._id)) {
+			// If permission already exists, skip the registration
+			return;
+		}
+
+		// Register the new permission
+		registeredPermissions.add(permission._id);
+		// Add logic to register the permission in your system, if necessary
+		// Example: register in a global permissions store or database
+	});
+}
+
 export const load: PageServerLoad = async (event) => {
 	try {
 		const session_id = event.cookies.get(SESSION_COOKIE_NAME);
@@ -58,7 +83,7 @@ export const load: PageServerLoad = async (event) => {
 		}
 
 		let user: User | null = null;
-		let roles: Role[] = [];
+		const roles = getAllRoles(); // Fetch roles from config file
 		let isFirstUser = false;
 		let allUsers: User[] = [];
 		let allTokens: Token[] = [];
@@ -74,8 +99,10 @@ export const load: PageServerLoad = async (event) => {
 				logger.debug(`User from session: ${JSON.stringify(user)}`);
 
 				if (user) {
-					roles = await auth.getAllRoles();
 					logger.debug(`Roles retrieved: ${JSON.stringify(roles)}`);
+
+					// Register user management permissions
+					registerPermissions();
 
 					// Define permission configuration for user management
 					const manageUsersPermissionConfig: PermissionConfig = {
@@ -120,10 +147,10 @@ export const load: PageServerLoad = async (event) => {
 		// Prepare user object for return, ensuring _id is a string
 		const safeUser = user
 			? {
-				...user,
-				_id: user._id.toString(),
-				password: '[REDACTED]' // Ensure password is not sent to client
-			}
+					...user,
+					_id: user._id.toString(),
+					password: '[REDACTED]' // Ensure password is not sent to client
+				}
 			: null;
 
 		// Format users and tokens for the admin area
@@ -149,14 +176,6 @@ export const load: PageServerLoad = async (event) => {
 			updatedAt: new Date(token.token_id).toISOString() // Assuming tokens are not updated
 		}));
 
-		// Provide manageUsersPermissionConfig to the client
-		const manageUsersPermissionConfig: PermissionConfig = {
-			contextId: 'config/userManagement',
-			requiredRole: 'admin',
-			action: 'manage',
-			contextType: 'system'
-		};
-
 		return {
 			user: safeUser,
 			roles: roles.map((role) => ({
@@ -166,13 +185,12 @@ export const load: PageServerLoad = async (event) => {
 			addUserForm,
 			changePasswordForm,
 			isFirstUser,
-			manageUsersPermissionConfig: manageUsersPermissionConfig,
 			adminData:
 				user?.role === 'admin' || hasManageUsersPermission
 					? {
-						users: formattedUsers,
-						tokens: formattedTokens
-					}
+							users: formattedUsers,
+							tokens: formattedTokens
+						}
 					: null
 		};
 	} catch (err) {
